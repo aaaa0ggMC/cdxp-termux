@@ -29,6 +29,7 @@ type App struct {
 
 	Getenv func(string) string
 	Home   string
+	Cache  string
 
 	pal palette
 
@@ -39,12 +40,17 @@ type App struct {
 
 // New returns an App wired to the real process environment.
 func New() *App {
+	cache, _ := os.UserCacheDir()
+	if cache == "" {
+		cache = os.TempDir()
+	}
 	return &App{
 		Stdout:   os.Stdout,
 		Stderr:   os.Stderr,
 		Stdin:    os.Stdin,
 		Getenv:   os.Getenv,
 		Home:     userHome(),
+		Cache:    cache,
 		pal:      newPalette(ColorEnabled(os.Stdout)),
 		Exec:     execProcess,
 		LookPath: exec.LookPath,

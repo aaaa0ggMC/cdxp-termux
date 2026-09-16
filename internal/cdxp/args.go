@@ -1,7 +1,11 @@
 package cdxp
 
 import (
+	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -134,6 +138,13 @@ func (a *App) BuildCodexArgs(p *Profile) (*launchSpec, error) {
 	}
 
 	args = append(args, p.StringSliceAt("codex_args")...)
+	
+	if p.TypeOf("extra_config.model_catalog_json") == "absent" {
+		catPath, err := a.generateModelCatalog(p, model, pid)
+		if err == nil && catPath != "" {
+			args = append(args, "-c", "model_catalog_json="+jsonQuote(catPath))
+		}
+	}
 
 	spec.Args = args
 	return spec, nil
@@ -199,4 +210,86 @@ func expandTilde(path, home string) string {
 		return filepath.Join(home, path[2:])
 	}
 	return path
+}
+
+
+
+type modelCatalog struct {
+	Models []catalogModel `json:"models"`
+}
+
+type catalogModel struct {
+	Slug                       string           `json:"slug"`
+	DisplayName                string           `json:"display_name"`
+	ModelName                  string           `json:"model_name"`
+	ModelContextWindow         int              `json:"model_context_window"`
+	ModelMaxOutputTokens       int              `json:"model_max_output_tokens"`
+	SupportedReasoningLevels   []string         `json:"supported_reasoning_levels"`
+	ShellType                  string           `json:"shell_type"`
+	Visibility                 string           `json:"visibility"`
+	SupportedInAPI             bool             `json:"supported_in_api"`
+	Priority                   int              `json:"priority"`
+	SupportVerbosity           bool             `json:"support_verbosity"`
+	TruncationPolicy           truncationPolicy `json:"truncation_policy"`
+	ExperimentalSupportedTools []string         `json:"experimental_supported_tools"`
+	BaseInstructions           string           `json:"base_instructions"`
+}
+
+type truncationPolicy struct {
+	Mode  string `json:"mode"`
+	Limit int    `json:"limit"`
+}
+
+func (a *App) generateModelCatalog(p *Profile, model, pid string) (string, error) {
+	dir := filepath.Join(a.Cache, "cdxp", "catalogs")
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, fmt.Sprintf("%s.json", pid))
+
+	cw := 128000
+	if v, ok := p.Get("model_context_window"); ok {
+		if n, ok := v.(json.Number); ok {
+			if parsed, err := strconv.Atoi(string(n)); err == nil {
+				cw = parsed
+			}
+		}
+	}
+	mt := 4096
+	if v, ok := p.Get("model_max_output_tokens"); ok {
+		if n, ok := v.(json.Number); ok {
+			if parsed, err := strconv.Atoi(string(n)); err == nil {
+				mt = parsed
+			}
+		}
+	}
+
+	name := p.StrOr("name", model)
+
+	cat := modelCatalog{
+		Models: []catalogModel{
+			{
+				Slug:                       model,
+				DisplayName:                name,
+				ModelName:                  model,
+				ModelContextWindow:         cw,
+				ModelMaxOutputTokens:       mt,
+				SupportedReasoningLevels:   []string{},
+				ShellType:                  "default",
+				Visibility:                 "list",
+				SupportedInAPI:             true,
+				Priority:                   1,
+				SupportVerbosity:           false,
+				TruncationPolicy:           truncationPolicy{Mode: "tokens", Limit: cw},
+				ExperimentalSupportedTools: []string{},
+				BaseInstructions:           "",
+			},
+		},
+	}
+
+	b, err := json.MarshalIndent(cat, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return path, os.WriteFile(path, b, 0644)
 }
