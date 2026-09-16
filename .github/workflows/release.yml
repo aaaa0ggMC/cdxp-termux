@@ -19,7 +19,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          cache: true
+          cache: false
 
       - name: Vet
         run: go vet ./...
@@ -31,7 +31,8 @@ jobs:
         run: go test -v ./...
 
   release:
-    if: github.event_name == 'push'
+    # Publishing is a side effect, so pull requests never release.
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -43,7 +44,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
-          cache: true
+          cache: false
 
       - name: Build release binaries
         shell: bash
