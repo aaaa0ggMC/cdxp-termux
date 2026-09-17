@@ -141,7 +141,9 @@ func (a *App) BuildCodexArgs(p *Profile) (*launchSpec, error) {
 	
 	if p.TypeOf("extra_config.model_catalog_json") == "absent" {
 		catPath, err := a.generateModelCatalog(p, model, pid)
-		if err == nil && catPath != "" {
+		if err != nil {
+			a.eprintf("警告: 生成 Catalog 失败: %v\n", err)
+		} else if catPath != "" {
 			args = append(args, "-c", "model_catalog_json="+jsonQuote(catPath))
 		}
 	}
